@@ -1,3 +1,4 @@
+const Jimp = require('jimp');
 const argv = require('minimist')(process.argv.slice(2));
 const fs = require('fs');
 const _path = require('path');
@@ -8,37 +9,35 @@ const output = argv.output || './output';
 const width = argv.width || 512;
 const height = argv.height || 512;
 
-const captions = !!argv.captions;
-const separator = argv.separator || '.';
-
 let globIndex = 1;
 
-const composeCaptions = (prev, newPart) => {
-  const newProcessed = newPart.split(separator).join(', ');
-  return `${prev}, ${newProcessed}`;
-};
-
-const processFile = (path = '', filename, captions) => {
+const processFile = async (path = '', filename) => {
   const inputFilePath = _path.resolve(input, path, filename);
   const outputFilePath = _path.resolve(output, path, `${globIndex}.png`);
   if (!fs.existsSync(_path.resolve(output, path))) fs.mkdirSync(_path.resolve(output, path), { recursive: true });
-  fs.copyFileSync(inputFilePath, outputFilePath);
+
+  const image = await Jimp.read(inputFilePath);
+  await image.cover(width, height);
+  await image.writeAsync(outputFilePath);
+    
   globIndex++;
 };
 
-const processDir = (path = '', captions) => {
+const processDir = async (path = '') => {
   const dirData = fs.readdirSync(_path.resolve(input, path));
 
-  dirData.forEach((item) => {
+  for await (let item of dirData) {
     const composedPath = _path.join(path, item);
     if (fs.lstatSync(_path.resolve(input, composedPath)).isDirectory()) {
-      processDir(composedPath);
+      await processDir(composedPath);
     } else {
-      processFile(path, item);
+      await processFile(path, item);
     }
-  });
+  }
 };
 
-if (fs.existsSync(input)) {
-  processDir();
-}
+(async function () {
+  if (fs.existsSync(input)) {
+    await processDir();
+  }  
+})();
